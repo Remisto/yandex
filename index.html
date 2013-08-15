@@ -1,0 +1,372 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Пъяница</title>
+  <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="http://code.jquery.com/jquery-1.9.1.js"></script>
+  <script src="http://code.jquery.com/ui/1.10.3/jquery-ui.js"></script>
+  <link rel="stylesheet" href="/resources/demos/style.css" />
+  <script>
+	var statusStr = ""
+	var peopleCount;//	Количество игрококв
+	var suits = ["♣", "♠", "♦", "♥"];//	Список мастей. только для отображения.
+	var suit = new Array();
+	var values = ["", "", "2", "3", "4", "5", "6", "7", "8", "9", "10", "В", "Д", "К", "Т"];//список достоинства. только для отображения.
+	var value = new Array();
+	var playerCards = new Array();//	Массив игроков и их карт.
+	for(i=1; i<=8; i++){
+		playerCards[i] = new Array();
+	}
+	var deskCards = new Array();//	Массив карт, находящихся на столе. Карты "спора" находятся в другом массиве.
+	var contentionCards = new Array();//	В этом.
+	//Тасование карт между игроками.
+	function shufflingCards(peopleCount){
+		var cards = [];
+		for(i=2; i<=14; i++){
+			cards.push(i+"0");
+			cards.push(i+"1");
+			cards.push(i+"2");
+			cards.push(i+"3");
+		}
+		for(i=1; i<=peopleCount; i++){
+			playerCards[i]=[];	
+		}
+		
+		while(cards.length!=0){
+			for(i=1; i<=peopleCount; i++){
+				if(cards.length!=0){
+					cardNumber = Math.floor(Math.random()*cards.length);
+					playerCards[i].push(cards[cardNumber]);
+					if(cards.length==1){
+						cards.splice(0,1);
+					}else{
+						cards.splice(cardNumber, 1);
+					}
+				}
+			}
+		}
+		
+		return true;
+	}
+	//Закончили тасовать. 
+	
+	function contention(contenders){
+		statusStr += "Игроки "+contenders+" имеют карты одинакового достоинства и начинают \"спор\". <br/>";
+		var winner = 0;
+		var maxValue = 0;
+		value = [];
+		suit = [];
+		var contendersCount = contenders.length;
+		for(j in contenders){//Кладем карту "рубашкой" вверх. Если у игрока закончились карты и он не может продолжить "спор", то он проиграл.
+			i=contenders[j];
+			if(playerCards[i].length!=0){
+				contentionCards[contentionCards.length] = playerCards[i][0];
+				playerCards[i].splice(0,1);
+				statusStr += "Игрок "+i+" выложил карту в закрытую. <br/>";
+			}else{
+				statusStr += "У игрока "+i+" нет карт и он выбывает из игры. <br/>";
+			}
+		}
+		
+		for(j in contenders){//Кладем карту "рубашкой" вниз. Опять же, если не осталось карт - игрок выбывает.
+			i=contenders[j];
+			if(playerCards[i].length!=0){
+				contentionCards[contentionCards.length] = playerCards[i][0];
+				playerCards[i].splice(0,1);
+				suit[i] = contentionCards[contentionCards.length-1].substr(contentionCards[contentionCards.length-1].length-1, 1);
+				value[i] = contentionCards[contentionCards.length-1].substring(0, contentionCards[contentionCards.length-1].length - 1);
+				if( parseInt(value[i]) > parseInt(maxValue) ){//Мы делаем проверку сразу, а не по массиву, как это было раньше, потому что "спорный" массив может состоять из элементов нескольких "споров".
+					maxValue = value[i];
+				}
+				statusStr += "Игрок "+i+" выложил в открытую карту: "+values[value[i]]+" "+suits[suit[i]]+". <br/>";
+			}else{
+				statusStr += "У игрока "+i+" нет карт и он выбывает из игры. <br/>";
+				contendersCount--;
+			}
+		}
+		
+		if(contendersCount==0){	// Если ни один игрок не закончил - все выбывают из игры, хотя кто-то и должен был получить эту стопку. 
+								// Карты уходят последнему игроку за столом, у которого осталась хотя бы одна карта.
+								// Вообще такое "нелепое" поведение можно объяснить только тем, что в ТЗ не было указано рекомендаций по обработке этой ситуации. 
+			statusStr += "Участвующие в споре игроки лишились всех своих карт. <br/> Они выбывают из игры. <br/><b>Да, вот такие у нас жесткие правила.</b>";
+			return 0;
+		}
+		
+		var maxValuePlayer = 0;
+		var nextContenders = [];
+		for(j in contenders){
+			i = contenders[j];
+			if(value[i] == maxValue){
+				nextContenders[nextContenders.length] = i;
+				maxValuePlayer=i;
+			}
+		}
+		
+		
+		
+		if(nextContenders.length==1){//Если победитель все-таки один - добавляем ему карты со стола.
+			statusStr += "Победил "+maxValuePlayer+" игрок. <br/>";
+			//statusStr += "На данный момент в колоде спора:"+contentionCards;
+			winner = maxValuePlayer;
+		}else{//Если нет - выявим спорщиков и начнем "спорить".
+			winner = contention(nextContenders);//	Мы определяем не только победителя. Также в глобальном массиве "спора" появляются карты, которые ему нужно отдать.
+		}
+		
+		return winner;
+	}
+	
+	function doTurn(){
+		//Сдача карт из руки на стол
+		$("#status-div" ).text("");
+		value[0] = 0;
+		deskCards = [];
+		for(i=1; i<=peopleCount; i++){
+			suit[i]=0;
+			value[i]=0;
+			if(playerCards[i].length!=0){
+				deskCards[i] = playerCards[i][0];
+				playerCards[i].splice(0,1);
+				suit[i] = deskCards[i].substr(deskCards[i].length-1, 1);
+				value[i] = deskCards[i].substring(0, deskCards[i].length - 1);
+				$("#Player"+i).text(values[value[i]]+" "+suits[suit[i]]);
+			}else{
+				$("#Player"+i).text("Выбыл");
+			}
+		}
+		//Сравнение карт, нахождение большего и вычесление номера победителя, если он один.
+		var maxValue = Math.max.apply({},value);
+		var maxValuePlayer = 0;
+		var contenders = [];
+		for(i=1; i<=peopleCount; i++){
+			if(value[i] == maxValue){
+				contenders[contenders.length] = i;
+				maxValuePlayer=i;
+			}
+		}
+		
+		if(contenders.length==1){//Если победитель все-таки один - добавляем ему карты со стола.
+			$("#Title"+maxValuePlayer).css('background-color', '#282');
+			for(i in deskCards){
+				playerCards[maxValuePlayer].push(deskCards[i]);
+			}
+			$("#status-div" ).text("Победил "+maxValuePlayer+" игрок.");
+		}else{//Если нет - выявим спорщиков и начнем "спорить".
+			contentionCards = [];
+			statusStr = "";
+			var winner = contention(contenders);//	Мы определяем не только победителя. Также в глобальном массиве "спора" появляются карты, которые ему нужно отдать.
+			
+			if(winner==0){	// Обработка нелепейшей ситуации с неразрешенным спором
+							// Все карты уходят игроку, у которого есть хотя-бы одна карта.
+				for(i=1; i<=peopleCount; i++){
+					if(playerCards[i].length!=0){
+						winner = i;
+					}
+				}
+			}
+			
+			for(i in deskCards){//Сначала отдаем карты, которые были на основном столе.
+				playerCards[winner].push(deskCards[i]);
+			}
+			for(i in contentionCards){//Затем карты "спора".
+				playerCards[winner].push(contentionCards[i]);
+			}
+			$("#status-div").html(statusStr);
+		}
+
+	
+		$( "#next-turn-container" ).show();
+		$( "#do-turn-container" ).hide();
+	}
+	
+	function nextTurn(){
+		cardsCount = 0;
+		$("#status-div" ).text("Сдайте следующую карту");
+		for(i=1; i<=peopleCount; i++){
+			if(playerCards[i].length==52){
+				$("#status-div" ).html("<b>Игрок "+i+" побеждает!</b>");
+				$( "#start-game-container" ).show();
+				$( "#next-turn-container" ).hide();
+			}
+			if(playerCards[i].length==0){
+				$("#Player"+i).text("Выбыл");
+			}
+			
+			//По чекбоксу выводим в открытую "руку" игрока. (Только для отладки, картинок нет)
+			if($("#openHand").prop("checked")){
+				$("#optionals"+i).text("\"Рука\" "+i+"ого игрока: ");
+				for( var j in playerCards[ i ]){
+					 $("#optionals"+i).append( playerCards[ i ][ j ] ).append(" ");
+				}
+			}else{
+				$("#optionals"+i).text("");
+			}
+			cardsCount += playerCards[i].length;
+		}
+		if($("#openHand").prop("checked")){
+			$("#optionalcards").text("Общее количество кард в игре: "+cardsCount);
+		}else{
+			$("#optionalcards").text("");
+		}
+		for(i=1; i<=peopleCount; i++){
+			$("#Player"+i).text("");
+			$("#Title"+i).css('background-color', '#FFF');
+		}
+
+		$( "#next-turn-container" ).hide();
+		$( "#do-turn-container" ).show();
+	}
+	
+	$(function() {	
+		//Сколько людей будут играть?
+		var peopleCountForm = $( "#peopleCount" ),
+		allFields = $( [] ).add( peopleCount ),
+		tips = $( ".validateTips" );
+ 
+		function updateTips( t ) {
+			tips
+			.text( t )
+			.addClass( "ui-state-highlight" );
+			setTimeout(function() {
+				tips.removeClass( "ui-state-highlight", 1500 );
+			}, 500 );
+		}
+ 
+		function check( o, regexp, n ) {
+			if ( !( regexp.test( o.val())) || o.val()<2 || o.val()>8 ) {
+				o.addClass( "ui-state-error" );
+				updateTips( n );
+				return false;
+			} else {
+				return true;
+			}
+		}
+ 
+		$( "#dialog-form" ).dialog({
+			autoOpen: false,
+			height: 300,
+			width: 350,
+			modal: true,
+			buttons: {
+				"Начать игру": function() {
+					var bValid = true;
+					allFields.removeClass( "ui-state-error" );
+					bValid = bValid && check( peopleCountForm, /^[0-9]+$/i, "В игре может быть от 2 до 8 игроков." );
+					if ( bValid ) {
+						peopleCount = peopleCountForm.val();
+						shufflingCards(peopleCount);
+						$( "#start-game-container" ).hide();
+						$( "#do-turn-container" ).show();
+						$( "#desk" ).show();
+						for(i=1; i<parseInt(peopleCount)+1; i++){
+							$( "#Player"+i ).show();
+							$( "#Title"+i ).show();
+							$( "#Player"+i ).text("");
+						}
+						for(i=parseInt(peopleCount)+1; i<=8; i++){
+							$( "#Player"+i ).hide();
+							$( "#Title"+i ).hide();
+						}
+						$("#status-div" ).text("Сдайте следующую карту");
+						$( this ).dialog( "close" );
+					}
+				},
+				"Отменить": function() {
+					$( this ).dialog( "close" );
+				}
+			},
+			close: function() {
+				allFields.val( "" ).removeClass( "ui-state-error" );
+			}
+		});
+		
+		$( "#start-game" )
+		.button()
+		.click(function() {
+			$( "#dialog-form" ).dialog( "open" );
+		});
+		
+		$( "#do-turn" )
+		.button()
+		.click(function() {
+			doTurn();
+		});
+		
+		$( "#next-turn" )
+		.button()
+		.click(function() {
+			nextTurn();
+		});
+		
+		$( "#next-turn-container" ).hide();
+		$( "#do-turn-container" ).hide();
+		$( "#desk" ).hide();
+		////////////////////////////////////////////////////////////
+
+		
+	});
+  </script>
+</head>
+<body>
+ 
+<!-- Диалог с выбором количества игроков -->
+<div id="dialog-form" title="Карточный Пъяница">
+	<p class="validateTips">Введите количество игроков</p>
+	<form>
+	<fieldset>
+		<label for="peopleCount">Количество игроков:</label>
+		<input type="text" name="peopleCount" id="peopleCount" class="text ui-widget-content ui-corner-all" />
+	</fieldset>
+	</form>
+</div>
+ <!-- --------------------------------- -->
+<div id="start-game-container" class="prime-button">
+	<button id="start-game">Начать игру</button>
+</div>
+<div id="do-turn-container" class="prime-button">
+	<button id="do-turn">Сдать карту</button>
+</div>
+<div id="next-turn-container" class="prime-button">
+	<button id="next-turn">Продолжить</button>
+</div>
+<table id="desk" class="desk" cellspacing="1" border="1" cellpadding="1">
+	<tr>
+		<td class="player-cell" id="Title1">Игрок 1</td>
+		<td class="player-cell" id="Title2">Игрок 2</td>
+		<td class="player-cell" id="Title3">Игрок 3</td>
+		<td class="player-cell" id="Title4">Игрок 4</td>
+		<td class="player-cell" id="Title5">Игрок 5</td>
+		<td class="player-cell" id="Title6">Игрок 6</td>
+		<td class="player-cell" id="Title7">Игрок 7</td>
+		<td class="player-cell" id="Title8">Игрок 8</td>
+	</tr>
+	<tr height="50px">
+		<td class="player-cell" id="Player1"></td>
+		<td class="player-cell" id="Player2"></td>
+		<td class="player-cell" id="Player3"></td>
+		<td class="player-cell" id="Player4"></td>
+		<td class="player-cell" id="Player5"></td>
+		<td class="player-cell" id="Player6"></td>
+		<td class="player-cell" id="Player7"></td>
+		<td class="player-cell" id="Player8"></td>
+	</tr>
+</table>
+<div class="desk contention" id="status-div">
+	Добро пожаловать в карточную игру<br/><br/><b>"Пъяница"</b><br/>
+</div>
+<div class="openHand">
+	<input type="checkbox" id="openHand">Игра в "открытую"</input>
+</div>
+
+<div id="optionals1"></div>
+<div id="optionals2"></div>
+<div id="optionals3"></div>
+<div id="optionals4"></div>
+<div id="optionals5"></div>
+<div id="optionals6"></div>
+<div id="optionals7"></div>
+<div id="optionals8"></div>
+<div id="optionalcards"></div>
+</body>
+</html>
